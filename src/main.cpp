@@ -9,23 +9,29 @@ const char* host = "ESP32BamburiCementKali";
 const char* SSID = "_braen";
 const char* SSID_PASSWORD = "1234567890";
 
+//variables for blinking an LED with Millis
+const int led = 2; // ESP32 Pin to which onboard LED is connected
+unsigned long previousMillis = 0;  // will store last time LED was updated
+const long interval = 1000;  // interval at which to blink (milliseconds)
+int ledState = LOW;  // ledState used to set the LED
+
 // create a server object
 WebServer server(80); // port 80 is the default port for HTTP
 
 
 /*STYLE for Webpage*/
-String style =
-"<style>#file-input,input{width:100%;height:44px;border-radius:4px;margin:10px auto;font-size:15px}"
-"input{background:#f1f1f1;border:0;padding:0 15px}body{background:#3498db;font-family:sans-serif;font-size:14px;color:#777}"
-"#file-input{padding:0;border:1px solid #ddd;line-height:44px;text-align:left;display:block;cursor:pointer}"
-"#bar,#prgbar{background-color:#f1f1f1;border-radius:10px}#bar{background-color:#3498db;width:0%;height:10px}"
-"form{background:#fff;max-width:258px;margin:75px auto;padding:30px;border-radius:5px;text-align:center}"
-".btn{background:#3498db;color:#fff;cursor:pointer}</style>";
+String style = "<style>#file-input,input{width:100%;height:44px;border-radius:4px;margin:10px auto;font-size:15px;}"
+    "input{background:#f1f1f1;border:0;padding:0 15px;}body{background:black;font-family:sans-serif;font-size:14px;color:#777;}"
+    "#file-input{padding:0;border:1px solid #ddd;line-height:44px;text-align:left;display:block;cursor:pointer;}"
+    "#bar,#prgbar{background-color:#f1f1f1;border-radius:10px}#bar{background-color:#3498db;width:0%;height:10px;}"
+    "form{background:#fff;max-width:258px;margin:75px auto;padding:30px;border-radius:5px;text-align:center;}"
+    ".btn{background:darkorange;color:#fff;cursor:pointer;}</style>";
+
 
 /*LOGIN Page*/
 String loginIndex = 
 "<form name=loginForm>"
-"<h1>ESP32 Login</h1>"
+"<h1>Bamburi [Manjaro] Controller ii </h1>"
 "<input name=userid placeholder='User ID'> "
 "<input name=pwd placeholder=Password type=Password> "
 "<input type=submit onclick=check(this.form) class=btn value=Login></form>"
@@ -86,6 +92,7 @@ String serverIndex =
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  pinMode(led, OUTPUT);
 
   // connect to WiFi network
   WiFi.begin(SSID, SSID_PASSWORD);
@@ -109,37 +116,36 @@ void setup() {
       delay(1000);
     }
   }
-
   Serial.println("mDNS responder started");
-
-  /* Return index page that is stored in serverIndex */
-  server.on("/", HTTP_GET, [](){
+  /*return index page which is stored in serverIndex */
+  server.on("/", HTTP_GET, []() {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", loginIndex);
   });
-  
-  /*To handle the firmware upload file .bin*/
-  server.on("/update", HTTP_POST, [](){
+  server.on("/serverIndex", HTTP_GET, []() {
     server.sendHeader("Connection", "close");
-    server.send(200, "text/plain", (Update.hasError()) ? "Fail" : "OK");
+    server.send(200, "text/html", serverIndex);
+  });
+  /*handling uploading firmware file */
+  server.on("/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
     ESP.restart();
-  }, [](){
+  }, []() {
     HTTPUpload& upload = server.upload();
-    if(upload.status == UPLOAD_FILE_START){
+    if (upload.status == UPLOAD_FILE_START) {
       Serial.printf("Update: %s\n", upload.filename.c_str());
-      if(!Update.begin(UPDATE_SIZE_UNKNOWN)){
-        // start with the maximum available size
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
         Update.printError(Serial);
       }
-    } else if(upload.status == UPLOAD_FILE_WRITE){
-      // flashing firmware to ESP
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize){
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      /* flashing firmware to ESP*/
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
         Update.printError(Serial);
       }
-    } else if (upload.status == UPLOAD_FILE_END){
-      if(Update.end(true)) {
-        // true to set the size to the current progress
-        Serial.printf("Update Success: %u\nRebooting ... ", upload.totalSize);
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) { //true to set the size to the current progress
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
       } else {
         Update.printError(Serial);
       }
@@ -148,8 +154,17 @@ void setup() {
   server.begin();
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+void loop(void) {
   server.handleClient();
   delay(1);
+  //loop to blink without delay
+ unsigned long currentMillis = millis();
+ if (currentMillis - previousMillis >= interval) {
+ // save the last time you blinked the LED
+ previousMillis = currentMillis;
+ // if the LED is off turn it on and vice-versa:
+ ledState = not(ledState);
+ // set the LED with the ledState of the variable:
+ digitalWrite(led,  ledState);
+ }
 }
